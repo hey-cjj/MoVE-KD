@@ -1,4 +1,4 @@
-# <img src="./images/image.png" alt="KD Icon" width="20" height="20"> MoVE-KD: Knowledge Distillation for VLMs with Mixture of Visual Encoders 
+# <img src="./images/image.png" alt="KD Icon" width="40" height="40"> MoVE-KD: Knowledge Distillation for VLMs with Mixture of Visual Encoders 
 [【CVPR 2025】MoVE-KD: Knowledge Distillation for VLMs with Mixture of Visual Encoders](https://arxiv.org/abs/2501.01709)  
 [Jiajun Cao](https://scholar.google.com.hk/citations?user=femNsd0AAAAJ&hl=zh-CN), [Yuan Zhang](https://scholar.google.com.hk/citations?hl=zh-CN&user=dXj1WskAAAAJ), [Tao Huang](https://scholar.google.com.hk/citations?user=jkcRdBgAAAAJ&hl=zh-CN), Ming Lu, Qizhe Zhang, Ruichuan An, Ningning MA, [Shanghang Zhang](https://scholar.google.com.hk/citations?user=voqw10cAAAAJ&hl=zh-CN)
 
