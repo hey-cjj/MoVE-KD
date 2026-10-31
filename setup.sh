@@ -84,7 +84,8 @@ PY_VER="$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_i
     || warn "Python $PY_VER chưa được kiểm thử với torch $TORCH_VERSION (khuyến nghị 3.10)."
 ok "Python $PY_VER tại $(command -v python)"
 
-python -m pip install --upgrade pip wheel setuptools packaging
+# setuptools>=81 bỏ pkg_resources -> setup.py của flash-attn 2.5.8 (build --no-build-isolation) lỗi
+python -m pip install --upgrade pip wheel "setuptools<70" packaging
 
 # -----------------------------------------------------------------------------
 step "3/7 Cài PyTorch $TORCH_VERSION ($CUDA_TAG)"
