@@ -233,24 +233,45 @@ Repo gốc không có code vẽ hình này, nên mình viết [`scripts/move-kd/
 | `images/routing_<ảnh>.png` | Expert MoLE được chọn cho mỗi patch tại layer 0, 8, 16, 22 |
 | `images/routing_share.png` | Tỉ lệ patch token đi vào mỗi expert theo layer |
 
-> *Chèn hình và nhận xét sau khi chạy (Ngày 3).* Khi nhận xét, nên so sánh với các quan sát của paper (Sec 4.4): student có giảm attention ở vùng nền lặp lại không, và các token "artifact" có attention cao ở vùng nền còn không (Sec 5.2).
+Kết quả chạy trên checkpoint `jiaojuncao/MoVE-KD-7b-v1.1` với 6 ảnh: 2 ảnh mẫu của LLaVA, 2 ảnh COCO val2014 (POPE), 2 ảnh TextVQA.
+
+![CLS attention - extreme_ironing](images/attn_extreme_ironing.png)
+![CLS attention - TextVQA](images/attn_0004c9478eeda995.png)
+![Routing MoLE - extreme_ironing](images/routing_extreme_ironing.png)
+![Tỉ lệ routing theo layer](images/routing_share.png)
+
+**Nhận xét:**
+
+- **[CLS] attention ở layer -2 của cả CLIP lẫn student đều dồn gần hết vào vài token đơn lẻ.** Các token này nằm ở vùng nền hoặc ở dải padding xám (do `expand2square`), không nằm trên vật thể chính. Đây chính là các token "artifact" có norm cao mà paper nhắc tới ở Sec 5.2 (cùng hiện tượng với *Vision Transformers Need Registers*). Hệ quả là token weight trong KD (softmax của chính attention này) thực chất chỉ tập trung vào vài vị trí, chứ không trải đều trên vùng có thông tin.
+- **Student gần như giữ nguyên bản đồ attention của CLIP.** Ở cả 6 ảnh, vị trí các đỉnh attention của student trùng với CLIP. Student chỉ bỏ bớt vài đỉnh phụ (ví dụ đỉnh ở biển hiệu và cửa ra vào trong ảnh TextVQA). Với 6 ảnh này, mình **không thấy rõ** hiện tượng như Fig 5 của paper, tức student chuyển hẳn attention từ nền sang vật thể hay chữ. Có thể paper đã chọn ảnh minh hoạ, hoặc dùng layer hay cách chuẩn hoá khác. Khi trình bày, nên nói là "student kế thừa phần lớn attention của CLIP và giảm nhẹ các đỉnh phụ", không nên khẳng định mạnh hơn.
+- **Routing MoLE chuyên môn hoá theo layer nhiều hơn là theo nội dung.** Ở các layer đầu (0–6), token được chia khá đều giữa các expert, và ranh giới giữa expert có liên quan tới vùng ảnh và vùng padding. Từ khoảng layer 10 trở đi, thường có một expert chiếm trên 70–100% token: layer 11 và 18 gần như chỉ dùng Expert 0, layer 22 gần như chỉ dùng Expert 1. Điều này khớp với ghi chú ở `Introduction.md` §2.4: ở chế độ sparse, router chỉ nhận gradient từ balance loss nên dễ suy biến về một expert ở từng layer. Nói cách khác, MoLE ở đây hoạt động gần giống "mỗi layer một LoRA" hơn là "mỗi token một expert".
 
 ### 2.5 Kết quả tự chạy lại
 
 **Mục tiêu.** Kiểm tra checkpoint MoVE-KD-v1.1-7B đã công bố ([`jiaojuncao/MoVE-KD-7b-v1.1`](https://huggingface.co/jiaojuncao/MoVE-KD-7b-v1.1)) có cho ra đúng số liệu trong paper trên 4 benchmark chấm local hay không.
 
-**Môi trường.** *(điền: GPU, CUDA, thời gian chạy mỗi benchmark)*
+**Môi trường.** 1× RTX 3090 24GB (instance vast.ai, ổ 32GB), Python 3.10, torch 2.1.2+cu121, transformers 4.37.2. Suy luận fp16, greedy (`temperature 0`), conv mode `vicuna_v1`, batch 1. Model chiếm khoảng 15GB VRAM. Tốc độ khoảng 3–3.6 câu/giây với câu trả lời ngắn (POPE, MME, SQA) và khoảng 2.5 câu/giây với TextVQA.
 
-| Benchmark | Paper (v1.1-7B) | Tự chạy | Chênh lệch |
-| :--- | ---: | ---: | ---: |
-| POPE (F1 trung bình) | 86.3 | *(chưa chạy)* | |
-| MME (perception) | 1509.1 | *(chưa chạy)* | |
-| TextVQA | 59.6 | *(chưa chạy)* | |
-| SQA-IMG | 69.8 | *(chưa chạy)* | |
+| Benchmark | Số câu | Thời gian | Paper (v1.1-7B) | Tự chạy | Chênh lệch |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| POPE (F1 trung bình) | 8910 | 42 phút | 86.3 | **86.06** | −0.2 |
+| MME (perception) | 2374 | 12 phút | 1509.1 | **1510.0** | +0.9 |
+| TextVQA | 5000 | 35 phút | 59.6 | **59.62** | +0.0 |
+| SQA-IMG | 4241 | 16 phút | 69.8 | **69.81** | +0.0 |
+
+Chi tiết:
+
+- POPE F1 theo từng split: random 87.17, popular 86.18, adversarial 84.82. Accuracy lần lượt 88.1 / 87.4 / 85.9.
+- MME cognition 331.1. Paper không báo con số này.
+- SQA: Accuracy trên toàn bộ câu là 71.59%.
+
+![Kết quả tái lập](images/results_reproduced_llava-move-kd-7b-v1.1.png)
+
+**Kết luận: tái lập thành công.** Cả 4 benchmark đều lệch không quá 0.2 điểm, riêng MME lệch 0.9 trên thang khoảng 2000. Checkpoint công bố đúng là mô hình được báo cáo trong paper, và pipeline eval trong `scripts/move-kd/eval/` cho kết quả chính xác. Phần chênh nhỏ ở POPE và MME nằm trong mức dao động bình thường do phần cứng và kernel fp16 khác nhau.
 
 > Bảng và biểu đồ `images/results_reproduced_<tên>.png` được sinh tự động bằng lệnh `python scripts/move-kd/summarize_results.py --name llava-move-kd-7b-v1.1`. Chênh lệch dưới khoảng 1 điểm (MME dưới khoảng 15 điểm) có thể coi là tái lập thành công, vì có sai khác do phần cứng, phiên bản thư viện và fp16 khi suy luận.
 
-**Smoke-test pipeline huấn luyện** (`scripts/move-kd/smoke_pretrain.sh`): chạy Stage 1 với 4 teacher, nhưng thay Vicuna-7B bằng TinyLlama-1.1B và chỉ chạy khoảng 30 bước. Mục tiêu là xác nhận forward KD, backward và việc lưu `mole_encoder.bin` / `encoder_adapter.bin` đều chạy được trên 1 GPU, **không** nhằm tái lập số liệu. *(điền: VRAM tối đa, loss đầu/cuối)*
+**Smoke-test pipeline huấn luyện** (`scripts/move-kd/smoke_pretrain.sh`): chạy Stage 1 với 4 teacher, nhưng thay Vicuna-7B bằng TinyLlama-1.1B và chỉ chạy khoảng 30 bước. Mục tiêu là xác nhận forward KD, backward và việc lưu `mole_encoder.bin` / `encoder_adapter.bin` đều chạy được trên 1 GPU, **không** nhằm tái lập số liệu. *(chưa chạy, vì nhóm chỉ làm inference. Có thể chạy trên cùng RTX 3090, vì GPU này hỗ trợ bf16.)*
 
 ### 2.6 Ghi chú tái lập (các vấn đề gặp khi chạy code)
 
@@ -261,6 +282,8 @@ Repo gốc không có code vẽ hình này, nên mình viết [`scripts/move-kd/
 5. **Teacher bị hardcode bf16 và đường dẫn.** `initialize_teachers` ép teacher và adapter về `bfloat16` trên CUDA, đồng thời đọc checkpoint teacher từ `./checkpoints/...`. Vì vậy huấn luyện cần GPU hỗ trợ bf16 (Ampere trở lên) và phải chạy từ thư mục gốc repo.
 6. **Không eval được checkpoint LLaVA-1.5 gốc bằng code repo này.** `builder.py` nạp mọi model có tên chứa `llava` bằng `EvalMoVELlavaLlamaForCausalLM`. Vì `config.json` của LLaVA-1.5 không có khoá `moe`, config nhận giá trị mặc định `moe_encoder=True`, nên CLIP bị gắn thêm các expert LoRA khởi tạo ngẫu nhiên. Tắt `kd_mode` cũng không giải quyết được, vì `encode_images` luôn tách 2 giá trị từ vision tower, mà vision tower chỉ trả về 2 giá trị khi `kd_mode=True`. Muốn chạy baseline thì dùng code LLaVA gốc (`PYTHONPATH=<LLaVA gốc>`) với cùng các wrapper eval.
 7. **Kiểm tra chéo bộ chấm điểm.** `eval.zip` của LLaVA có kèm câu trả lời của LLaVA-1.5-13B. Chấm lại các câu trả lời này bằng các script trong repo cho ra POPE 85.95, MME 1531.3, TextVQA 61.25, SQA-IMG 71.64, khớp với Table 1 (85.9 / 1531.3 / 61.3 / 71.6). Như vậy dữ liệu đáp án, cấu trúc thư mục và cách đọc metric đều đúng, mọi chênh lệch ở mục 2.5 đến từ bước chạy model.
+8. **Lỗi môi trường gặp khi chạy thật.** (a) `setuptools>=81` đã bỏ `pkg_resources`, làm `flash-attn==2.5.8` không build được, nên `setup.sh` giờ pin `setuptools<70`. (b) `LIMIT=N` với POPE trước đây lấy N dòng đầu file, các dòng này đều thuộc một split, nên `eval_pope.py` chia cho 0. `pope.sh` giờ lấy N câu đầu của **mỗi** split. (c) Log nạp model có khoảng 390 cảnh báo `copying from a non-meta parameter ... to a meta parameter ... no-op`. Các cảnh báo này đến từ lúc dựng CLIP rỗng trên meta device; sau đó trọng số thật được nạp từ shard 3 của checkpoint, nên có thể bỏ qua. Kết quả ở bảng trên xác nhận điều này.
+9. **Ổ đĩa nhỏ.** Với ổ 32GB, không thể tải nguyên `val2014.zip` (6GB) và `train_val_images.zip` (7GB) cùng với checkpoint 14GB và môi trường. Mình dùng `remotezip` với 16 luồng song song để chỉ lấy đúng 500 ảnh POPE và 3166 ảnh TextVQA, tổng chưa tới 2GB.
 
 ### 2.7 Cách tái lập
 
