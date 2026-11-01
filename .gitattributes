@@ -27,3 +27,8 @@
 
 # Jupyter notebook
 *.ipynb  text eol=lf
+
+# Shell scripts
+# =============
+# Always LF so scripts copied from a Windows checkout still run under bash
+*.sh     text eol=lf

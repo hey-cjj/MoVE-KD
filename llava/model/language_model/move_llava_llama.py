@@ -88,6 +88,9 @@ class MoVELlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
         self.image_process = self.model.get_vision_tower().image_processor
 
         self.config.kd['kd_mode'] = self.training_args.kd
+        # Khi train, vision tower dựng từ model_args (không có trường kd) nên CLIPVisionTower.forward chỉ trả
+        # features, trong khi encode_images luôn unpack 2 giá trị -> batch bị tách nhầm. Đồng bộ kd sang tower.
+        self.get_model().get_vision_tower().args.kd = self.config.kd
 
         if self.model_args.encoder_teachers:
             self.vision_teachers = init_vision_teachers(self.model_args)
