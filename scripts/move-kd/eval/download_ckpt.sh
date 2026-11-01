@@ -8,9 +8,7 @@
 # Chỉ dành cho checkpoint MoVE-KD. KHÔNG dùng repo này để eval checkpoint LLaVA-1.5 gốc: builder.py nạp mọi
 # model tên 'llava' bằng EvalMoVELlavaLlamaForCausalLM, config LLaVA-1.5 không có khoá 'moe' nên mặc định
 # moe_encoder=True -> CLIP bị gắn LoRA expert khởi tạo ngẫu nhiên; còn kd_mode=False thì encode_images lỗi.
-# Baseline: chạy cùng các wrapper eval nhưng với code LLaVA gốc đặt trước trong PYTHONPATH, vd.
-#   git clone https://github.com/haotian-liu/LLaVA /content/LLaVA
-#   PYTHONPATH=/content/LLaVA bash scripts/move-kd/eval/pope.sh liuhaotian/llava-v1.5-7b
+# Baseline: bash scripts/move-kd/eval/baseline.sh liuhaotian/llava-v1.5-7b (chạy wrapper bằng code LLaVA gốc)
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
 
