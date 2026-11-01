@@ -271,7 +271,30 @@ Chi tiết:
 
 > Bảng và biểu đồ `images/results_reproduced_<tên>.png` được sinh tự động bằng lệnh `python scripts/move-kd/summarize_results.py --name llava-move-kd-7b-v1.1`. Chênh lệch dưới khoảng 1 điểm (MME dưới khoảng 15 điểm) có thể coi là tái lập thành công, vì có sai khác do phần cứng, phiên bản thư viện và fp16 khi suy luận.
 
-**Smoke-test pipeline huấn luyện** (`scripts/move-kd/smoke_pretrain.sh`): chạy Stage 1 với 4 teacher, nhưng thay Vicuna-7B bằng TinyLlama-1.1B và chỉ chạy khoảng 30 bước. Mục tiêu là xác nhận forward KD, backward và việc lưu `mole_encoder.bin` / `encoder_adapter.bin` đều chạy được trên 1 GPU, **không** nhằm tái lập số liệu. *(chưa chạy, vì nhóm chỉ làm inference. Có thể chạy trên cùng RTX 3090, vì GPU này hỗ trợ bf16.)*
+**Baseline LLaVA-1.5-7B tự chạy.** Để so sánh công bằng (cùng phần cứng, cùng dữ liệu, cùng bộ chấm), mình chạy lại [`liuhaotian/llava-v1.5-7b`](https://huggingface.co/liuhaotian/llava-v1.5-7b) bằng `scripts/move-kd/eval/baseline.sh` (code LLaVA gốc, xem mục 2.6 ý 6) trên cùng máy, với cùng cấu hình suy luận.
+
+| Benchmark | Thời gian | LLaVA-1.5-7B (paper) | LLaVA-1.5-7B (tự chạy) | MoVE-KD-v1.1-7B (tự chạy) | MoVE-KD − baseline tự chạy | MoVE-KD − baseline paper |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| POPE (F1 trung bình) | 40 phút | 85.9 | **85.92** | 86.06 | +0.1 | +0.4 |
+| MME (perception) | 12 phút | 1510.7 | **1504.6** | 1510.0 | +5.4 | −0.7 |
+| TextVQA | 34 phút | 58.2 | **58.23** | 59.62 | +1.4 | +1.4 |
+| SQA-IMG | 21 phút | 66.8 | **69.46** | 69.81 | +0.4 | +3.0 |
+
+Chi tiết baseline: POPE F1 random 87.39 / popular 86.15 / adversarial 84.23. MME cognition 357.9. SQA Accuracy toàn bộ 70.12%.
+
+![Baseline LLaVA-1.5-7B tái lập](images/results_reproduced_llava-v1.5-7b.png)
+
+Nhận xét:
+
+1. **Baseline khớp paper ở 3/4 benchmark.** TextVQA và POPE trùng tới 0.1, MME lệch −6.1 (dưới 0.5% thang điểm).
+2. **SQA là ngoại lệ: baseline tự chạy cao hơn paper 2.7 điểm (69.46 so với 66.8).** Bộ chấm SQA đã được kiểm chứng ở ý 7 mục 2.6 (chấm lại câu trả lời LLaVA-1.5-13B ra đúng 71.6), nên chênh lệch nằm ở bước sinh câu trả lời. Một khả năng là con số 66.8 được đo bằng phiên bản code hoặc prompt cũ hơn so với `model_vqa_science` + `--single-pred-prompt` hiện tại. Mình chưa kiểm chứng giả thuyết này.
+3. **Hệ quả cho kết luận của paper.** So với baseline tự chạy, MoVE-KD vẫn tăng ở cả 4 benchmark, nhưng mức tăng ở SQA giảm từ +3.0 (paper) xuống **+0.4**. Mức tăng rõ nhất còn lại là **TextVQA +1.4**, phù hợp với lập luận rằng các teacher (EVA-02, ConvNeXt độ phân giải cao, SAM) bổ sung chi tiết cục bộ và chữ trong ảnh. POPE (+0.1) và MME (+5.4) chỉ tăng nhẹ, ở mức gần với dao động khi chạy lại.
+
+**Smoke-test pipeline huấn luyện** (`scripts/move-kd/smoke_pretrain.sh`): chạy Stage 1 với đủ 4 teacher (CLIP, SAM, EVA-02, ConvNeXt), nhưng thay Vicuna-7B bằng TinyLlama-1.1B, 100 mẫu LCS-558K, 30 bước, batch 2. Mục tiêu là xác nhận forward KD, backward và việc lưu checkpoint đều chạy được trên 1 GPU, **không** nhằm tái lập số liệu.
+
+- **Kết quả: chạy hết 30 bước sau khi sửa một bug trong code train** (mục 2.6 ý 10). Tổng thời gian 2 phút trên RTX 3090, VRAM đỉnh 17.8GB.
+- Tạo đủ 3 file `mm_projector.bin`, `mole_encoder.bin`, `encoder_adapter.bin`.
+- Loss tổng (LM + 0.01×balance + 0.5×KD) giảm từ 10.13 ở bước 1 xuống 4.68 ở bước 30. Trung bình 5 bước đầu là 8.0, 5 bước cuối là 4.5. Đường loss dao động khá mạnh vì batch chỉ có 2 mẫu.
 
 ### 2.6 Ghi chú tái lập (các vấn đề gặp khi chạy code)
 
@@ -284,6 +307,11 @@ Chi tiết:
 7. **Kiểm tra chéo bộ chấm điểm.** `eval.zip` của LLaVA có kèm câu trả lời của LLaVA-1.5-13B. Chấm lại các câu trả lời này bằng các script trong repo cho ra POPE 85.95, MME 1531.3, TextVQA 61.25, SQA-IMG 71.64, khớp với Table 1 (85.9 / 1531.3 / 61.3 / 71.6). Như vậy dữ liệu đáp án, cấu trúc thư mục và cách đọc metric đều đúng, mọi chênh lệch ở mục 2.5 đến từ bước chạy model.
 8. **Lỗi môi trường gặp khi chạy thật.** (a) `setuptools>=81` đã bỏ `pkg_resources`, làm `flash-attn==2.5.8` không build được, nên `setup.sh` giờ pin `setuptools<70`. (b) `LIMIT=N` với POPE trước đây lấy N dòng đầu file, các dòng này đều thuộc một split, nên `eval_pope.py` chia cho 0. `pope.sh` giờ lấy N câu đầu của **mỗi** split. (c) Log nạp model có khoảng 390 cảnh báo `copying from a non-meta parameter ... to a meta parameter ... no-op`. Các cảnh báo này đến từ lúc dựng CLIP rỗng trên meta device; sau đó trọng số thật được nạp từ shard 3 của checkpoint, nên có thể bỏ qua. Kết quả ở bảng trên xác nhận điều này.
 9. **Ổ đĩa nhỏ.** Với ổ 32GB, không thể tải nguyên `val2014.zip` (6GB) và `train_val_images.zip` (7GB) cùng với checkpoint 14GB và môi trường. Mình dùng `remotezip` với 16 luồng song song để chỉ lấy đúng 500 ảnh POPE và 3166 ảnh TextVQA, tổng chưa tới 2GB.
+10. **Bug khiến code train không chạy được (đã sửa).** Khi train, vision tower được dựng bằng `build_vision_tower(model_args)`. `ModelArguments` không có trường `kd`, nên `CLIPVisionTower.forward` chỉ trả về tensor features. Trong khi đó `encode_images` (`llava_arch.py`) luôn unpack 2 giá trị, nên tensor bị tách theo chiều batch.
+    - Với batch 2: ảnh thứ nhất bị coi là `image_features`, ảnh thứ hai bị coi là `image_forward_outs`. Lỗi chỉ lộ ra ở `torch.cat` với thông báo `Tensors must have same number of dimensions: got 2 and 1`.
+    - Với batch khác 2: lỗi unpack ngay.
+    - Lúc eval không gặp lỗi này, vì tower được dựng từ `config` (có `config.kd`).
+    - Cách sửa: thêm một dòng trong `initialize_teachers` (`move_llava_llama.py`) để đồng bộ `config.kd` sang `args` của vision tower. Bug này ảnh hưởng cả Stage 1 lẫn Stage 2, vì cả hai đều dựng tower từ `model_args`.
 
 ### 2.7 Cách tái lập
 

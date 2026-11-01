@@ -20,6 +20,8 @@ BENCHES=("$@")
 
 [[ -d "$LLAVA_DIR" ]] || git clone -q https://github.com/haotian-liu/LLaVA "$LLAVA_DIR"
 cd "$LLAVA_DIR"
+# LLaVA gốc có sẵn thư mục playground/ -> ln -sfn sẽ tạo symlink lồng bên trong; phải xoá thư mục đó trước
+[[ -L playground ]] || rm -rf playground
 ln -sfn "$REPO/playground" playground
 mkdir -p scripts && ln -sfn "$REPO/scripts/move-kd" scripts/move-kd
 python -c "import llava, os, sys; f = os.path.realpath(llava.__file__); print('[ OK ] llava từ', f); \
